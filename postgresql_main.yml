@@ -1,0 +1,8 @@
+- name: Create a PostgreSQL DB server
+  hosts: postgresql
+  gather_facts: true
+  become: yes
+  become_method: sudo
+  tags: [postgresql]
+  roles:
+  - postgresql

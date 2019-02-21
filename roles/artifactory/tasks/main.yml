@@ -1,0 +1,198 @@
+---
+- name: Download JDK
+  get_url:
+    url: "https://download.oracle.com/otn-pub/java/jdk/8u201-b09/42970487e3af4f5aa5bca3f542482c60/jdk-8u201-linux-x64.tar.gz"
+    headers: 'Cookie:oraclelicense=accept-securebackup-cookie'
+    dest: /opt/jdk-8u201-linux-x64.tar.gz
+
+- name: Unpack archive
+  command: "tar -zxf /opt/jdk-8u201-linux-x64.tar.gz -C /opt creates=/tmp/jdk-8u201-linux-x64"
+
+- name: Fix ownership
+  file: state=directory path=/tmp/jdk-8u201-linux-x64 owner=root group=root recurse=yes
+
+- name: Make Java available for system
+  command: 'alternatives --install "/usr/bin/java" "java" "/tmp/jdk-8u201-linux-x64/bin/java" 2000'
+#https://nallarameshreddy.wordpress.com/2017/05/30/steps-to-download-and-install-artifactory-in-linux/
+- name: Clean up
+  file: state=absent path=/opt/jdk-8u201-linux-x64.tar.gz
+
+- name: 'check presence of java'
+  command: '/usr/bin/java -version'
+  register: java
+  changed_when: no
+  tags:
+    - artifactory
+    - verify
+
+- name: 'yum install prerequisites'
+  yum:
+    name:
+      - openssl
+      - unzip
+    state: present
+  retries: 3
+  register: result
+  until: result is succeeded
+  tags:
+    - artifactory
+
+- name: 'yum install net-tools'
+  yum:
+    name: net-tools
+    state: present
+  retries: 3
+  register: result
+  until: result is succeeded
+
+- name: 'set permissions on /opt'
+  file:
+    path: /opt
+    state: directory
+    mode: 0755
+- name: 'create user to run artifactory'
+  user:
+    name: "{{ artifactory_username }}"
+    home: /opt/artifactory/
+    shell: /bin/bash
+    system: true
+  tags:
+    - users
+
+- name: 'verify presence of artifactory'
+  stat:
+    path: "{{ artifactory_home }}/webapps/artifactory.war"
+  register: artifactory_jarfile
+
+- name: ansible create /opt/artifactory directory
+  file:
+    path: /opt/artifactory
+    state: directory
+
+- name: 'download artifactory'
+  unarchive:
+    remote_src: yes
+    src: "{{ artifactory_url }}"
+    dest: /opt/artifactory
+  #  validate_certs: no
+  #retries: 3
+  #when: not artifactory_jarfile.stat.exists
+
+
+
+- name: 'create config dir for artifactory'
+  file:
+    dest: /etc/opt/jfrog/artifactory
+    state: directory
+    owner: "{{ artifactory_username }}"
+    mode: 0755
+  tags:
+    - config
+
+- name: 'create configuration file'
+  template:
+    src: etc-opt-jfrog-artifactory-default
+    dest: /etc/opt/jfrog/artifactory/default
+    owner: "{{ artifactory_username }}"
+    group: "{{ artifactory_username }}"
+    mode: 0644
+  notify: 'restart artifactory'
+  tags:
+    - config
+
+- name: 'symlink current version'
+  file:
+    state: link
+    dest: /opt/artifactory/artifactory
+    src: "{{ artifactory_home }}"
+    owner: "{{ artifactory_username }}"
+  notify: 'restart artifactory'
+  tags:
+    - config
+
+- name: 'install artifactory as a service'
+  command: "{{ artifactory_home }}/bin/installService.sh {{ artifactory_username }}"
+  args:
+    creates: /etc/init.d/artifactory
+  notify: 'restart artifactory'
+  tags:
+    - init
+
+- name: 'enable artifactory service'
+  service:
+    name: artifactory
+    enabled: true
+  tags:
+    - init
+
+- name: 'create deploy script'
+  copy:
+    src: deploy-file.sh
+    dest: '/usr/local/bin/deploy-file.sh'
+    owner: "{{ artifactory_username }}"
+    group: "{{ artifactory_username }}"
+    mode: 0755
+# Storage configuration
+- name: 'ensure storage properties configuration is present'
+  template:
+    src: storage.properties
+    dest: "{{ artifactory_home }}/etc/storage.properties"
+    owner: "{{ artifactory_username }}"
+    group: "{{ artifactory_username }}"
+    mode: 0600
+
+- name: 'ensure artifactory_data_filestore_path variable is set'
+  fail:
+    msg: "artifactory_data_filestore_path is required with derby storage strategy"
+  when: not artifactory_data_filestore_path
+  tags:
+    - artifactory
+
+- name: 'ensure artifactory_data_derby_path variable is set'
+  fail:
+    msg: "artifactory_data_derby_path is required with derby storage strategy"
+  when: not artifactory_data_derby_path
+  tags:
+    - artifactory
+
+- name: 'ensure filestore folder exists'
+  file:
+    path: "{{ artifactory_data_filestore_path }}"
+    owner: "{{ artifactory_username }}"
+    group: "{{ artifactory_username }}"
+    state: directory
+  tags:
+    - artifactory
+
+- name: 'ensure derby folder exists'
+  file:
+    path: "{{ artifactory_data_derby_path }}"
+    owner: "{{ artifactory_username }}"
+    group: "{{ artifactory_username }}"
+    state: directory
+  tags:
+    - artifactory
+  
+# Database configuration
+- name: 'ensure storage properties configuration is present'
+  template:
+    src: db.properties
+    dest: "{{ artifactory_home }}/etc/db.properties"
+    owner: "{{ artifactory_username }}"
+    group: "{{ artifactory_username }}"
+    mode: 0600
+
+- name: 'download jdbc connector for postgres'
+  when: artifactory_database == 'postgresql'
+  get_url:
+    url: "{{ postgres_jdbc_url }}"
+    dest: "{{ artifactory_home }}/tomcat/lib"
+  retries: 3
+  register: jdbc_installed
+
+
+
+  #https://nallarameshreddy.wordpress.com/2017/05/30/steps-to-download-and-install-artifactory-in-linux/
+  #https://www.jfrog.com/confluence/display/RTF/Installing+on+Linux+Solaris+or+Mac+OS
+  # $ARTIFACTORY_HOME/bin/artifactoryctl start
+# sudo /opt/jfrog/artifactory/bin/artifactoryctl start

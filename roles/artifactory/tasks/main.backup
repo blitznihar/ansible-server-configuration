@@ -1,0 +1,97 @@
+- name: 'download jdbc connector for postgres'
+  get_url:
+    url: "{{ postgres_jdbc_url }}"
+    dest: "{{ artifactory_home }}/tomcat/lib"
+  retries: 3
+  register: jdbc_installed
+
+    
+- name: Ensure JFROG database is created
+  sudo_user: postgres
+  postgresql_db: name=artifactory
+             encoding='UTF-8'
+             lc_collate='en_US.UTF-8'
+             lc_ctype='en_US.UTF-8'
+             template='template0'
+             state=present
+
+- name: Ensure JFROG user has access to the database
+  sudo_user: postgres
+  postgresql_user: db=artifactory
+               name=artifactory
+               password=artifactory
+               priv=ALL
+               state=present
+
+- name: Ensure group "devops" exists
+  group:
+    name: devops
+    state: present
+
+- name: Add the user 'artifactory' with a bash shell, appending to group 'wheel'
+  user:
+    name: artifactory
+    shell: /bin/bash
+    groups: devops
+    append: yes
+    password: artifactory
+
+- lineinfile:
+    path: /etc/sudoers
+    state: present
+    regexp: '^# %wheel'
+    line: 'devops ALL=(ALL) NOPASSWD: ALL'
+    validate: 'visudo -cf %s'
+
+- name: Update the software package repository
+  yum:
+    name: '*'
+    update_cache: yes
+
+
+- name: Download ARTIFACTORY RPM File
+  get_url:
+    url: https://downloads.ulyaoth.net/rpm/ulyaoth-latest.centos.x86_64.rpm
+    dest: /tmp/ulyaoth-latest.centos.x86_64.rpm
+
+- name: Download ARTIFACTORY RPM File
+  get_url:
+    url: https://jfrog.bintray.com/artifactory-rpms/jfrog-artifactory-oss-6.8.1.rpm
+    dest: /tmp/jfrog-artifactory-oss-6.8.1.rpm
+
+- name: COPY POSTGRESQL JDBC File
+  get_url:
+    url: https://jdbc.postgresql.org/download/postgresql-9.4.1209.jre6.jar
+    dest: /tmp/postgresql-9.4.1209.jre6.jar
+
+- name: Install dependencies
+  package:
+    name: "{{ item }}"
+    state: latest
+  loop:
+    - java-1.8.0-openjdk
+    - /tmp/ulyaoth-latest.centos.x86_64.rpm
+    - /tmp/jfrog-artifactory-oss-6.8.1.rpm
+
+- name: Configure Artifactory DB
+  copy:
+    src: /opt/jfrog/artifactory/misc/db/postgresql.properties
+    dest: /var/opt/jfrog/artifactory/etc/db.properties
+
+- name: COPY POSTGRESQL JDBC File
+  copy:
+    src: /tmp/postgresql-9.4.1209.jre6.jar
+    dest: /opt/jfrog/artifactory/tomcat/lib/postgresql-9.4.1209.jre6.jar
+
+- name: Allow port 8081
+  shell: iptables -I INPUT -p tcp --dport 8081 -m state --state NEW,ESTABLISHED -j ACCEPT
+
+- name: start the services
+  service:
+    name: "{{ itemtostart }}"
+    state: started
+    enabled: true
+  loop:
+    - artifactory
+
+    # set javahome /usr/lib/jvm/jre-openjdk

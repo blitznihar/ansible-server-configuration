@@ -1,0 +1,106 @@
+# install jdk 1.8
+- name: Update the software package repository
+  yum:
+    name: '*'
+    update_cache: yes
+
+
+- name: Install dependencies
+  package:
+    name: "{{ item }}"
+    state: latest
+  loop:
+    - https://download.postgresql.org/pub/repos/yum/11/redhat/rhel-7-x86_64/pgdg-centos11-11-2.noarch.rpm
+    - postgresql11-server 
+    - postgresql11
+    - python-psycopg2
+
+- name: Initiate database
+  command: /usr/pgsql-11/bin/postgresql-11-setup initdb
+          #  creates=/var/lib/pgsql/data/postgresql.conf
+
+- name: Ensure the PostgreSQL service is running
+  service: name=postgresql-11 state=started enabled=yes
+
+- name: Ensure PostgreSQL is listening on all localhost
+  lineinfile: dest=/var/lib/pgsql/data/postgresql.conf
+    regexp='^#?listen_addresses\s*='
+    line="listen_addresses = '127.0.0.1'"
+    state=present
+  notify: restart postgresql
+
+- lineinfile: dest=/var/lib/pgsql/data/pg_hba.conf
+              regexp='host\s+all\s+all\s+127.0.0.1/32\s+md5'
+              line='host all all 127.0.0.1/32 md5'
+              insertbefore=BOF
+  notify: restart postgresql
+
+- name: Ensure Test database is created
+  sudo_user: postgres
+  postgresql_db: name={{ test_db_name }}
+             encoding='UTF-8'
+             lc_collate='en_US.UTF-8'
+             lc_ctype='en_US.UTF-8'
+             template='template0'
+             state=present
+
+- name: Ensure test user has access to the database
+  sudo_user: postgres
+  postgresql_user: db={{ test_db_name }}
+               name={{ test_db_user }}
+               password={{ test_db_password }}
+               priv=ALL
+               state=present
+
+- name: Ensure JFROG database is created
+  sudo_user: postgres
+  postgresql_db: name={{ jfrog_db_name }}
+             encoding='UTF-8'
+             lc_collate='en_US.UTF-8'
+             lc_ctype='en_US.UTF-8'
+             template='template0'
+             state=present
+
+- name: Ensure JFROG user has access to the database
+  sudo_user: postgres
+  postgresql_user: db={{ jfrog_db_name }}
+               name={{ jfrog_db_user }}
+               password={{ jfrog_db_password }}
+               priv=ALL
+               state=present
+
+
+- name: Ensure SONAR database is created
+  sudo_user: postgres
+  postgresql_db: name={{ sonar_db_name }}
+             encoding='UTF-8'
+             lc_collate='en_US.UTF-8'
+             lc_ctype='en_US.UTF-8'
+             template='template0'
+             state=present
+
+- name: Ensure user has access to the database
+  sudo_user: postgres
+  postgresql_user: db={{ sonar_db_name }}
+               name={{ sonar_db_user }}
+               password={{ sonar_db_password }}
+               priv=ALL
+               state=present
+
+# open default port for postgresql to be externally accessible
+- name: Allow port 5432
+  shell: iptables -A INPUT -p tcp -s 0/0 --sport 1024:65535 --dport 5432 -m state --state NEW,ESTABLISHED -j ACCEPT
+- name: Allow port 5432
+  shell: iptables -A OUTPUT -p tcp --sport 5432 -d 0/0 --dport 1024:65535 -m state --state ESTABLISHED -j ACCEPT
+
+# change password for postgres  sudo passwd postgres.
+
+# change admin password Issue the command \password postgres.
+# Enter (and verify) the new password.
+
+# create test DB CREATE DATABASE testdb;.
+
+# create test DB CREATE DATABASE jfrogdb;
+# create test DB CREATE DATABASE sonarqubedb;
+# create usersnames for jfrogpostgresqluser
+# create usersnames for sonarpostgresqluser

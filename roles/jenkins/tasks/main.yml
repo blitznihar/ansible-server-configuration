@@ -14,6 +14,7 @@
     - git
     - texlive-latex
     - wget
+    - nginx
 
 - name: Download jenkins repo
   command: wget -O /etc/yum.repos.d/jenkins.repo http://pkg.jenkins-ci.org/redhat/jenkins.repo
@@ -40,14 +41,35 @@
 - name: Allow port 8080
   shell: iptables -I INPUT -p tcp --dport 8080 -m state --state NEW,ESTABLISHED -j ACCEPT
 
-- name: start the server
+# sudo cat **/var/lib/jenkins/secrets/initialAdminPassword**
+# SET NGINX CONFIGURATION TO nginx.conf:
+# location / {
+#            proxy_pass  http://127.0.0.1:8080;
+#        }
+
+#sudo setenforce 0
+#
+
+- name: Enable services to run at boot time
   service:
-    name: jenkins
+    name: {{ itemtostart }}
+    enabled: yes
+    masked: no
+  loop:
+    - nginx
+    - jenkins
+
+- name: start the services
+  service:
+    name: {{ itemtostart }}
     state: started
+  loop:
+    - nginx
+    - jenkins
+
+
 - name: Print key
   shell: cat < /var/lib/jenkins/secrets/initialAdminPassword
-- wait_for:
-  port: 8080
 
 
 
@@ -65,7 +87,34 @@
 # https://luvunix.wordpress.com/2017/10/03/jenkins-deployment-using-ansible/
 
 # sudo cat **/var/lib/jenkins/secrets/initialAdminPassword**
+# SET NGINX CONFIGURATION TO nginx.conf:
+# location / {
+#            proxy_pass  http://127.0.0.1:8080;
+#        }
+
+#sudo setenforce 0
+#  sudo chown ansible nginx.conf to replace the nginx file in the destination server
 
 
 
+- name: Add the user 'jenkins' with a bash shell, appending to group 'wheel'
+  user:
+    name: jenkins
+    shell: /bin/bash
+    groups: devops
+    append: yes
+    password: Jenkins@1234
 
+- name: Create a 2048-bit SSH key for user jenkins in ~jenkins/.ssh/id_rsa
+  user:
+    name: jenkins
+    generate_ssh_key: yes
+    ssh_key_bits: 2048
+    ssh_key_file: .ssh/id_rsa
+
+- lineinfile:
+    path: /etc/sudoers
+    state: present
+    regexp: '^# %wheel'
+    line: 'jenkins ALL=(ALL) NOPASSWD: ALL'
+    validate: 'visudo -cf %s'

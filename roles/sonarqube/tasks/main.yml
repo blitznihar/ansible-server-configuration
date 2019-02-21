@@ -1,0 +1,229 @@
+# Notes:
+# Create users and groups
+- name: Ensure group "devops" exists
+  group:
+    name: devops
+    state: present
+
+- name: Ensure group "sonarqube" exists
+  group:
+    name: sonarqube
+    state: present
+#https://docs.sonarqube.org/latest/requirements/requirements/
+- name: Setting limits /etc/security/limits.conf 
+  blockinfile:
+    dest: /etc/security/limits.conf
+    content: |
+      sonarqube   -   nofile   65536
+      sonarqube   -   nproc    2048
+    state: present
+    create: no
+
+- name: vm.max_map_count is greater or equals to 262144
+  shell: sysctl -w vm.max_map_count=262144
+- name: fs.file-max is greater or equals to 65536
+  shell: sysctl -w fs.file-max=65536
+- name: the user running SonarQube can open at least 65536 file descriptors
+  shell: ulimit -n 65536
+- name: the user running SonarQube can open at least 2048 threads
+  shell: ulimit -u 2048
+
+- name: Add the user 'sonarqube' with a bash shell, appending to sonarqube and devops group
+  user:
+    name: sonarqube
+    shell: /bin/bash
+    groups: devops, sonarqube
+    append: yes
+    password: sonarqube
+
+
+---
+- name: Download JDK
+  get_url:
+    url: "https://download.oracle.com/otn-pub/java/jdk/8u201-b09/42970487e3af4f5aa5bca3f542482c60/jdk-8u201-linux-x64.tar.gz"
+    headers: 'Cookie:oraclelicense=accept-securebackup-cookie'
+    dest: /opt/jdk-8u201-linux-x64.tar.gz
+
+- name: Unpack archive
+  command: "tar -zxf /opt/jdk-8u201-linux-x64.tar.gz -C /opt creates=/tmp/jdk-8u201-linux-x64"
+
+- name: Fix ownership
+  file: state=directory path=/tmp/jdk-8u201-linux-x64 owner=root group=root recurse=yes
+
+- name: Make Java available for system
+  command: 'alternatives --install "/usr/bin/java" "java" "/tmp/jdk-8u201-linux-x64/bin/java" 2000'
+
+- name: Clean up
+  file: state=absent path=/opt/jdk-8u201-linux-x64.tar.gz
+
+- name: 'check presence of java'
+  command: '/usr/bin/java -version'
+  register: java
+  changed_when: no
+  tags:
+    - artifactory
+    - verify
+    
+# Create Database:
+# - name: Ensure SONAR database is created
+#   sudo_user: postgres
+#   postgresql_db: name={{ sonar_db_name }}
+#              encoding='UTF-8'
+#              lc_collate='en_US.UTF-8'
+#              lc_ctype='en_US.UTF-8'
+#              template='template0'
+#              state=present
+
+# - name: Ensure user has access to the database
+#   sudo_user: postgres
+#   postgresql_user: db={{ sonar_db_name }}
+#                name={{ sonar_db_user }}
+#                password={{ sonar_db_password }}
+#                priv=ALL
+#                state=present
+
+
+#   Download path: https://binaries.sonarsource.com/Distribution/sonarqube/sonarqube-7.6.zip
+#   Unzip
+
+- name: 'download sonarqube and unzip'
+  file:
+    path: "{{ sonar_home }}"
+    state: directory 
+
+- name: 'download sonarqube and unzip'
+  unarchive:
+    remote_src: yes
+    src: "{{ sonar_download_url }}"
+    dest: "{{ sonar_home }}"
+
+
+# TODO:
+#   Database
+#   Add below in $SONARQUBE-HOME/conf/sonar.properties
+#   Example for PostgreSQL
+#   sonar.jdbc.username=sonarqube
+#   sonar.jdbc.password=sonarqube
+#   sonar.jdbc.url=jdbc:postgresql://localhost/sonarqube
+# - name: Create sonarqube.service
+#   blockinfile:
+#     dest: /etc/systemd/system/sonarqube.service
+#     content: |
+#       sonar.jdbc.username=sonarqube
+#       sonar.jdbc.password=sonarqube
+#       sonar.jdbc.url=jdbc:postgresql://localhost/sonarqube
+#     state: present
+#     create: no
+# - name: Add postgresql username
+#   replace:
+#     path: "{{sonar_home}}/sonarqube-7.6/conf/sonar.properties"
+#     regexp: '.*sonar\.jdbc\.username*.*'
+#     replace: 'sonar.jdbc.username=sonarqube'
+
+# - name: Add postgresql password
+#   replace:
+#     path: "{{sonar_home}}/sonarqube-7.6/conf/sonar.properties"
+#     regexp: '.*sonar\.jdbc\.password*.*'
+#     replace: 'sonar.jdbc.password=sonarqube'
+
+# - name: Add postgresql connection
+#   replace:
+#     path: "{{sonar_home}}/sonarqube-7.6/conf/sonar.properties"
+#     regexp: '.*sonar\.jdbc\.url*.*'
+#     replace: 'sonar.jdbc.url=postgresql://localhost/sonarqube'
+
+# NOT MANDATORY
+# Configuring the Elasticsearch storage path
+# $SONARQUBE-HOME/conf/sonar.properties
+# sonar.path.data=/var/sonarqube/data
+# sonar.path.temp=/var/sonarqube/temp
+
+# NOT MANDATORY
+# Default Port 9000 can be changed to 80
+# $SONARQUBE-HOME/conf/sonar.properties:
+# sonar.web.host=192.0.0.1
+# sonar.web.port=80
+# sonar.web.context=/sonarqube
+- name: Install NGINX
+  yum:
+    name: nginx
+    state: latest
+    update_cache: yes
+- name: proxy_pass  http://localhost:9000 in NGINX
+  blockinfile:
+    path: /etc/nginx/nginx.conf
+    marker: "<!-- {mark} ANSIBLE MANAGED BLOCK -->"
+    insertafter: "location / {"
+    content: |
+      
+      proxy_pass  http://localhost:9000
+#TODO: CONFIGURE NGINX 
+  # location / { 
+  # proxy_pass  http://localhost:9000
+  # }
+#Port opening
+- name: Allow port 9000
+  shell: iptables -I INPUT -p tcp --dport 9000 -m state --state NEW,ESTABLISHED -j ACCEPT
+
+# NOT MANDATORY
+# use a Java JDK and activate the server mode
+# $SONARQUBE-HOME/conf/sonar.properties:
+# sonar.web.javaOpts=-server
+
+
+
+
+# TODO:
+# Create File /etc/systemd/system/sonarqube.service
+- name: Clean artifact path
+  file:
+    state: absent
+    path: /etc/systemd/system/sonarqube.service
+
+- name: Create sonarqube.service
+  blockinfile:
+    dest: /etc/systemd/system/sonarqube.service
+    content: |
+      [Unit]
+      Description=SonarQube service
+      After=syslog.target network.target
+
+      [Service]
+      Type=simple
+      User=sonarqube
+      Group=sonarqube
+      PermissionsStartOnly=true
+      ExecStart=/bin/nohup /opt/jdk1.8.0_201/bin/java -Xms32m -Xmx32m -Djava.net.preferIPv4Stack=true -jar /opt/sonarqube/sonarqube-7.6/lib/sonar-application-7.6.jar
+      StandardOutput=syslog
+      LimitNOFILE=65536
+      LimitNPROC=8192
+      TimeoutStartSec=5
+      Restart=always
+
+      [Install]
+      WantedBy=multi-user.target
+    state: present
+    create: yes
+#http://www.mydailytutorials.com/ansible-lineinfile-module-examples/
+
+
+# Running SonarQube as a Service on Linux with SystemD
+- name: Ensure the SonarQube service is running
+  service: name=sonarqube state=started enabled=yes
+
+# Running NGINX as a Service on Linux with SystemD
+- name: Ensure the NGINX service is running
+  service: name=nginx state=started enabled=yes
+
+  #sudo chown -R sonar:sonar sonar-install-folder/
+  # sudo vi /opt/sonarqube/bin/linux-x86-64/sonar.sh
+  # Change  
+  # RUN_AS_USER=sonar 
+  # now start the server 
+  # sudo sh /opt/sonarqube/bin/linux-x86-64/sonar.sh start
+- name: restart server
+  shell: sleep 2 && shutdown -r now "Ansible updates triggered"
+  async: 1
+  poll: 0
+  become: true
+  ignore_errors: true

@@ -1,0 +1,14 @@
+---
+test_db_name: testdb
+test_db_user: testuser
+test_db_password: testuser123
+
+
+jfrog_db_name: artifactory
+jfrog_db_user: artifactory
+jfrog_db_password: password
+
+
+sonar_db_name: sonarqube
+sonar_db_user: sonarqube
+sonar_db_password: sonarqube
