@@ -1,5 +1,5 @@
 [jenkins]
-blitznihar2c.mylabserver.com ansible_user=ansible
+blitznihar1c.mylabserver.com ansible_user=ansible
 [postgresql]
 blitznihar2c.mylabserver.com ansible_user=ansible
 [artifactory]

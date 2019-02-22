@@ -32,24 +32,28 @@
 - name: Allow port 8080
   shell: iptables -I INPUT -p tcp --dport 8080 -m state --state NEW,ESTABLISHED -j ACCEPT
 
-- name: Enable services to run at boot time
-  service:
-    name: "{{ itemtostart }}"
-    enabled: yes
-    masked: no
-  loop:
-    - jenkins
-
-- name: start the services
-  service:
-    name: "{{ itemtostart }}"
-    state: started
-  loop:
-    - jenkins
+- name: Ensure the Jenkins service is running
+  service: name=jenkins state=started enabled=yes
+  tags:
+    - final
 
 - name: Print key
-  shell: cat < /var/lib/jenkins/secrets/initialAdminPassword
+  shell: cat /var/lib/jenkins/secrets/initialAdminPassword
+  register: adminpass
+  tags:
+    - final
 
+- debug:
+    var: adminpass
+  tags:
+    - final
+
+- name: Ensure group "devops" exists
+  group:
+    name: devops
+    state: present
+  tags:
+    - final
 
 - name: Add the user 'jenkins' with a bash shell, appending to group 'wheel'
   user:
@@ -58,13 +62,17 @@
     groups: devops
     append: yes
     password: Jenkins@1234
+  tags:
+    - final
 
-- name: Create a 2048-bit SSH key for user jenkins in ~jenkins/.ssh/id_rsa
+- name: Create a 2048-bit SSH key for user jenkins in ~/.ssh/id_rsa
   user:
     name: jenkins
     generate_ssh_key: yes
     ssh_key_bits: 2048
-    ssh_key_file: .ssh/id_rsa
+    ssh_key_file: ~/.ssh/id_rsa
+  tags:
+    - final
 
 - lineinfile:
     path: /etc/sudoers
@@ -72,3 +80,5 @@
     regexp: '^# %wheel'
     line: 'jenkins ALL=(ALL) NOPASSWD: ALL'
     validate: 'visudo -cf %s'
+  tags:
+    - final
