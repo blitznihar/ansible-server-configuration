@@ -1,4 +1,5 @@
 ---
+  
 - name: Download JDK
   get_url:
     url: "https://download.oracle.com/otn-pub/java/jdk/8u201-b09/42970487e3af4f5aa5bca3f542482c60/jdk-8u201-linux-x64.tar.gz"
@@ -6,13 +7,37 @@
     dest: /opt/jdk-8u201-linux-x64.tar.gz
 
 - name: Unpack archive
-  command: "tar -zxf /opt/jdk-8u201-linux-x64.tar.gz -C /opt creates=/tmp/jdk-8u201-linux-x64"
+  command: "tar -zxf /opt/jdk-8u201-linux-x64.tar.gz -C /opt"
 
-- name: Fix ownership
-  file: state=directory path=/tmp/jdk-8u201-linux-x64 owner=root group=root recurse=yes
+# - name: Fix ownership
+#   file: state=directory path=/tmp/jdk-8u201-linux-x64 owner=root group=root recurse=yes
 
 - name: Make Java available for system
-  command: 'alternatives --install "/usr/bin/java" "java" "/tmp/jdk-8u201-linux-x64/bin/java" 2000'
+  command: 'alternatives --install "/usr/bin/java" "java" "/opt/jdk1.8.0_201/bin/java" 2000'
+
+# - name: Make Java available for system
+#   expect:
+#     command: 'alternatives --config java'
+#     responses:
+#       Enter to keep the current selection[+], or type selection number: 1
+
+- name: Make Javac available for system
+  command: 'alternatives --install "/usr/bin/javac" "javac" "/opt/jdk1.8.0_201/bin/javac" 2000'
+
+# - name: Make Javac available for system
+#   expect:
+#     command: 'alternatives --config javac'
+#     responses:
+#       Enter to keep the current selection[+], or type selection number: 1  
+
+- name: Make Jar available for system
+  command: 'alternatives --install "/usr/bin/jar" "jar" "/opt/jdk1.8.0_201/bin/jar" 2000'
+
+# - name: Make Jar available for system
+#   expect:
+#     command: 'alternatives --config jar'
+#     responses:
+#       Enter to keep the current selection[+], or type selection number: 1 
 #https://nallarameshreddy.wordpress.com/2017/05/30/steps-to-download-and-install-artifactory-in-linux/
 - name: Clean up
   file: state=absent path=/opt/jdk-8u201-linux-x64.tar.gz
@@ -50,6 +75,7 @@
     path: /opt
     state: directory
     mode: 0755
+
 - name: 'create user to run artifactory'
   user:
     name: "{{ artifactory_username }}"
@@ -125,72 +151,8 @@
   tags:
     - init
 
-- name: 'create deploy script'
-  copy:
-    src: deploy-file.sh
-    dest: '/usr/local/bin/deploy-file.sh'
-    owner: "{{ artifactory_username }}"
-    group: "{{ artifactory_username }}"
-    mode: 0755
-# Storage configuration
-- name: 'ensure storage properties configuration is present'
-  template:
-    src: storage.properties
-    dest: "{{ artifactory_home }}/etc/storage.properties"
-    owner: "{{ artifactory_username }}"
-    group: "{{ artifactory_username }}"
-    mode: 0600
-
-- name: 'ensure artifactory_data_filestore_path variable is set'
-  fail:
-    msg: "artifactory_data_filestore_path is required with derby storage strategy"
-  when: not artifactory_data_filestore_path
-  tags:
-    - artifactory
-
-- name: 'ensure artifactory_data_derby_path variable is set'
-  fail:
-    msg: "artifactory_data_derby_path is required with derby storage strategy"
-  when: not artifactory_data_derby_path
-  tags:
-    - artifactory
-
-- name: 'ensure filestore folder exists'
-  file:
-    path: "{{ artifactory_data_filestore_path }}"
-    owner: "{{ artifactory_username }}"
-    group: "{{ artifactory_username }}"
-    state: directory
-  tags:
-    - artifactory
-
-- name: 'ensure derby folder exists'
-  file:
-    path: "{{ artifactory_data_derby_path }}"
-    owner: "{{ artifactory_username }}"
-    group: "{{ artifactory_username }}"
-    state: directory
-  tags:
-    - artifactory
-  
-# Database configuration
-- name: 'ensure storage properties configuration is present'
-  template:
-    src: db.properties
-    dest: "{{ artifactory_home }}/etc/db.properties"
-    owner: "{{ artifactory_username }}"
-    group: "{{ artifactory_username }}"
-    mode: 0600
-
-- name: 'download jdbc connector for postgres'
-  when: artifactory_database == 'postgresql'
-  get_url:
-    url: "{{ postgres_jdbc_url }}"
-    dest: "{{ artifactory_home }}/tomcat/lib"
-  retries: 3
-  register: jdbc_installed
-
-
+- name: Allow port 8081
+  shell: iptables -I INPUT -p tcp --dport 8081 -m state --state NEW,ESTABLISHED -j ACCEPT
 
   #https://nallarameshreddy.wordpress.com/2017/05/30/steps-to-download-and-install-artifactory-in-linux/
   #https://www.jfrog.com/confluence/display/RTF/Installing+on+Linux+Solaris+or+Mac+OS

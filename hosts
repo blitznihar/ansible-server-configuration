@@ -3,6 +3,6 @@ blitznihar2c.mylabserver.com ansible_user=ansible
 [postgresql]
 blitznihar2c.mylabserver.com ansible_user=ansible
 [artifactory]
-blitznihar2c.mylabserver.com ansible_user=ansible
+blitznihar3c.mylabserver.com ansible_user=ansible
 [sonarqube]
 blitznihar2c.mylabserver.com ansible_user=ansible

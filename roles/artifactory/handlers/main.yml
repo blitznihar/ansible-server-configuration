@@ -1,6 +1,4 @@
 ---
-
-# handlers file for bbaassssiiee.artifactory
 - name: 'start artifactory'
   become: yes
   service:
