@@ -1,5 +1,4 @@
 ---
-  
 - name: Download JDK
   get_url:
     url: "https://download.oracle.com/otn-pub/java/jdk/8u201-b09/42970487e3af4f5aa5bca3f542482c60/jdk-8u201-linux-x64.tar.gz"
@@ -9,36 +8,15 @@
 - name: Unpack archive
   command: "tar -zxf /opt/jdk-8u201-linux-x64.tar.gz -C /opt"
 
-# - name: Fix ownership
-#   file: state=directory path=/tmp/jdk-8u201-linux-x64 owner=root group=root recurse=yes
-
 - name: Make Java available for system
   command: 'alternatives --install "/usr/bin/java" "java" "/opt/jdk1.8.0_201/bin/java" 2000'
-
-# - name: Make Java available for system
-#   expect:
-#     command: 'alternatives --config java'
-#     responses:
-#       Enter to keep the current selection[+], or type selection number: 1
 
 - name: Make Javac available for system
   command: 'alternatives --install "/usr/bin/javac" "javac" "/opt/jdk1.8.0_201/bin/javac" 2000'
 
-# - name: Make Javac available for system
-#   expect:
-#     command: 'alternatives --config javac'
-#     responses:
-#       Enter to keep the current selection[+], or type selection number: 1  
-
 - name: Make Jar available for system
   command: 'alternatives --install "/usr/bin/jar" "jar" "/opt/jdk1.8.0_201/bin/jar" 2000'
 
-# - name: Make Jar available for system
-#   expect:
-#     command: 'alternatives --config jar'
-#     responses:
-#       Enter to keep the current selection[+], or type selection number: 1 
-#https://nallarameshreddy.wordpress.com/2017/05/30/steps-to-download-and-install-artifactory-in-linux/
 - name: Clean up
   file: state=absent path=/opt/jdk-8u201-linux-x64.tar.gz
 
@@ -100,11 +78,6 @@
     remote_src: yes
     src: "{{ artifactory_url }}"
     dest: /opt/artifactory
-  #  validate_certs: no
-  #retries: 3
-  #when: not artifactory_jarfile.stat.exists
-
-
 
 - name: 'create config dir for artifactory'
   file:
@@ -156,5 +129,3 @@
 
   #https://nallarameshreddy.wordpress.com/2017/05/30/steps-to-download-and-install-artifactory-in-linux/
   #https://www.jfrog.com/confluence/display/RTF/Installing+on+Linux+Solaris+or+Mac+OS
-  # $ARTIFACTORY_HOME/bin/artifactoryctl start
-# sudo /opt/jfrog/artifactory/bin/artifactoryctl start

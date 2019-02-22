@@ -1,23 +1,17 @@
-# install jdk 1.8
-- name: Update the software package repository
-  yum:
-    name: '*'
-    update_cache: yes
-
 
 - name: Install dependencies
   package:
     name: "{{ item }}"
-    state: latest
+    state: present
   loop:
     - java-1.8.0-openjdk
     - git
     - texlive-latex
-    - wget
-    - nginx
 
 - name: Download jenkins repo
-  command: wget -O /etc/yum.repos.d/jenkins.repo http://pkg.jenkins-ci.org/redhat/jenkins.repo
+  get_url:
+    url: "http://pkg.jenkins-ci.org/redhat/jenkins.repo"
+    dest: /etc/yum.repos.d/jenkins.repo
 
 - name: Import jenkins CI key
   rpm_key:
@@ -32,69 +26,29 @@
 - name: Install jenkins
   yum:
     name: jenkins
-    state: latest
+    state: present
     update_cache: yes
-
-
-
 
 - name: Allow port 8080
   shell: iptables -I INPUT -p tcp --dport 8080 -m state --state NEW,ESTABLISHED -j ACCEPT
 
-# sudo cat **/var/lib/jenkins/secrets/initialAdminPassword**
-# SET NGINX CONFIGURATION TO nginx.conf:
-# location / {
-#            proxy_pass  http://127.0.0.1:8080;
-#        }
-
-#sudo setenforce 0
-#
-
 - name: Enable services to run at boot time
   service:
-    name: {{ itemtostart }}
+    name: "{{ itemtostart }}"
     enabled: yes
     masked: no
   loop:
-    - nginx
     - jenkins
 
 - name: start the services
   service:
-    name: {{ itemtostart }}
+    name: "{{ itemtostart }}"
     state: started
   loop:
-    - nginx
     - jenkins
-
 
 - name: Print key
   shell: cat < /var/lib/jenkins/secrets/initialAdminPassword
-
-
-
-# 
-# yum remove java
-# yum install java-1.8.0-openjdk
-
-# install jenkins
-#
-# sudo wget -O /etc/yum.repos.d/jenkins.repo http://pkg.jenkins-ci.org/redhat-stable/jenkins.repo
-# sudo rpm --import https://jenkins-ci.org/redhat/jenkins-ci.org.key
-# sudo yum install jenkins
-
-# install git
-# https://luvunix.wordpress.com/2017/10/03/jenkins-deployment-using-ansible/
-
-# sudo cat **/var/lib/jenkins/secrets/initialAdminPassword**
-# SET NGINX CONFIGURATION TO nginx.conf:
-# location / {
-#            proxy_pass  http://127.0.0.1:8080;
-#        }
-
-#sudo setenforce 0
-#  sudo chown ansible nginx.conf to replace the nginx file in the destination server
-
 
 
 - name: Add the user 'jenkins' with a bash shell, appending to group 'wheel'
