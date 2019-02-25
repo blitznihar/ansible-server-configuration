@@ -90,6 +90,14 @@
 - name: Allow port 8080
   shell: iptables -I INPUT -p tcp --dport 8080 -m state --state NEW,ESTABLISHED -j ACCEPT
 
+- name: Copy Jenkins Configurations
+  copy:
+    src: jenkins/
+    dest: /var/lib/jenkins/
+    remote_src: no
+  tags:
+   - copy
+
 - name: Ensure the Jenkins service is running
   service: 
     name: jenkins 
@@ -130,19 +138,4 @@
       line: 'jenkins ALL=(ALL) NOPASSWD: ALL'
       validate: 'visudo -cf %s'
 
-- name: Print key
-  shell: cat /var/lib/jenkins/secrets/initialAdminPassword
-  register: adminpass
 
-- name: Print Jenkins Admin password
-  debug:
-    var: adminpass
-
-
-- name: Copy Jenkins Configurations
-  copy:
-    src: jenkins/
-    dest: /var/lib/jenkins/
-    remote_src: no
-  tags:
-   - copy
