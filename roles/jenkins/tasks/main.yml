@@ -4,9 +4,59 @@
     name: "{{ item }}"
     state: present
   loop:
-    - java-1.8.0-openjdk
     - git
     - texlive-latex
+
+- name: Download JDK
+  get_url:
+    url: "https://download.oracle.com/otn-pub/java/jdk/8u201-b09/42970487e3af4f5aa5bca3f542482c60/jdk-8u201-linux-x64.tar.gz"
+    headers: 'Cookie:oraclelicense=accept-securebackup-cookie'
+    dest: /opt/jdk-8u201-linux-x64.tar.gz
+
+- name: Unpack archive JDK
+  unarchive:
+    src: /opt/jdk-8u201-linux-x64.tar.gz
+    dest: /opt
+    remote_src: yes
+
+- name: correct java version selected
+  alternatives:
+    name: java
+    link: /usr/bin/java
+    path: /opt/jdk1.8.0_201/bin/java
+
+- name: correct javac version selected
+  alternatives:
+    name: javac
+    link: /usr/bin/javac
+    path: /opt/jdk1.8.0_201/bin/javac
+
+- name: correct jar version selected
+  alternatives:
+    name: jar
+    link: /usr/bin/jar
+    path: /opt/jdk1.8.0_201/bin/jar
+
+- name: Clean up
+  file: 
+    state: absent 
+    path: /opt/jdk-8u201-linux-x64.tar.gz
+
+- name: Update the software package repository
+  yum:
+    name: '*'
+    update_cache: yes
+
+- name: Install Maven
+  yum:
+    name: maven
+    state: present
+    update_cache: yes  
+
+- name: 'check presence of mvn'
+  command: 'mvn --version'
+  register: mvn
+  changed_when: no
 
 - name: Download jenkins repo
   get_url:
@@ -18,10 +68,6 @@
     key: http://pkg.jenkins-ci.org/redhat/jenkins-ci.org.key
     state: present
 
-- name: Update the software package repository
-  yum:
-    name: '*'
-    update_cache: yes
 
 - name: Install jenkins
   yum:
@@ -29,41 +75,45 @@
     state: present
     update_cache: yes
 
+- name: Install docker
+  yum:
+    name: docker
+    state: present
+    update_cache: yes
+
+- name: Install device-mapper-event-libs
+  yum:
+    name: device-mapper-event-libs
+    state: present
+    update_cache: yes
+
 - name: Allow port 8080
   shell: iptables -I INPUT -p tcp --dport 8080 -m state --state NEW,ESTABLISHED -j ACCEPT
 
 - name: Ensure the Jenkins service is running
-  service: name=jenkins state=started enabled=yes
-  tags:
-    - final
+  service: 
+    name: jenkins 
+    state: started 
+    enabled: yes
 
-- name: Print key
-  shell: cat /var/lib/jenkins/secrets/initialAdminPassword
-  register: adminpass
-  tags:
-    - final
+- name: Ensure the docker service is running
+  service: 
+    name: docker 
+    state: started 
+    enabled: yes
 
-- debug:
-    var: adminpass
-  tags:
-    - final
 
 - name: Ensure group "devops" exists
   group:
     name: devops
     state: present
-  tags:
-    - final
 
 - name: Add the user 'jenkins' with a bash shell, appending to group 'wheel'
   user:
     name: jenkins
-    shell: /bin/bash
     groups: devops
     append: yes
     password: Jenkins@1234
-  tags:
-    - final
 
 - name: Create a 2048-bit SSH key for user jenkins in ~/.ssh/id_rsa
   user:
@@ -71,14 +121,28 @@
     generate_ssh_key: yes
     ssh_key_bits: 2048
     ssh_key_file: ~/.ssh/id_rsa
-  tags:
-    - final
 
-- lineinfile:
-    path: /etc/sudoers
-    state: present
-    regexp: '^# %wheel'
-    line: 'jenkins ALL=(ALL) NOPASSWD: ALL'
-    validate: 'visudo -cf %s'
+- name: Adding Jenkins as admin 
+  lineinfile:
+      path: /etc/sudoers
+      state: present
+      regexp: '^# %wheel'
+      line: 'jenkins ALL=(ALL) NOPASSWD: ALL'
+      validate: 'visudo -cf %s'
+
+- name: Print key
+  shell: cat /var/lib/jenkins/secrets/initialAdminPassword
+  register: adminpass
+
+- name: Print Jenkins Admin password
+  debug:
+    var: adminpass
+
+
+- name: Copy Jenkins Configurations
+  copy:
+    src: jenkins/
+    dest: /var/lib/jenkins/
+    remote_src: no
   tags:
-    - final
+   - copy
