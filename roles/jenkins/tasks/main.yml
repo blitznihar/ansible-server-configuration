@@ -38,8 +38,8 @@
     path: /opt/jdk1.8.0_201/bin/jar
 
 - name: Clean up
-  file: 
-    state: absent 
+  file:
+    state: absent
     path: /opt/jdk-8u201-linux-x64.tar.gz
 
 - name: Update the software package repository
@@ -51,7 +51,7 @@
   yum:
     name: maven
     state: present
-    update_cache: yes  
+    update_cache: yes
 
 - name: 'check presence of mvn'
   command: 'mvn --version'
@@ -87,8 +87,16 @@
     state: present
     update_cache: yes
 
+# - name: Allow port 8080
+#   shell: iptables -I INPUT -p tcp --dport 8080 -m state --state NEW,ESTABLISHED -j ACCEPT
+
 - name: Allow port 8080
-  shell: iptables -I INPUT -p tcp --dport 8080 -m state --state NEW,ESTABLISHED -j ACCEPT
+  iptables:
+     chain: INPUT
+     protocol: tcp
+     destination_port: "8080"
+     ctstate: NEW,ESTABLISHED
+     jump: ACCEPT
 
 - name: Copy Jenkins Configurations
   copy:
@@ -99,15 +107,15 @@
    - copy
 
 - name: Ensure the Jenkins service is running
-  service: 
-    name: jenkins 
-    state: started 
+  service:
+    name: jenkins
+    state: started
     enabled: yes
 
 - name: Ensure the docker service is running
-  service: 
-    name: docker 
-    state: started 
+  service:
+    name: docker
+    state: started
     enabled: yes
 
 
@@ -130,7 +138,7 @@
     ssh_key_bits: 2048
     ssh_key_file: ~/.ssh/id_rsa
 
-- name: Adding Jenkins as admin 
+- name: Adding Jenkins as admin
   lineinfile:
       path: /etc/sudoers
       state: present

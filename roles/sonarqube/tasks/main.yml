@@ -48,30 +48,34 @@
     headers: 'Cookie:oraclelicense=accept-securebackup-cookie'
     dest: /opt/jdk-8u201-linux-x64.tar.gz
 
-- name: Unpack archive
-  command: "tar -zxf /opt/jdk-8u201-linux-x64.tar.gz -C /opt"
+- name: Unpack archive JDK
+  unarchive:
+    src: /opt/jdk-8u201-linux-x64.tar.gz
+    dest: /opt
+    remote_src: yes
 
-- name: Make Java available for system
-  command: 'alternatives --install "/usr/bin/java" "java" "/opt/jdk1.8.0_201/bin/java" 2000'
+- name: correct java version selected
+  alternatives:
+    name: java
+    link: /usr/bin/java
+    path: /opt/jdk1.8.0_201/bin/java
 
-- name: Make Javac available for system
-  command: 'alternatives --install "/usr/bin/javac" "javac" "/opt/jdk1.8.0_201/bin/javac" 2000'
+- name: correct javac version selected
+  alternatives:
+    name: javac
+    link: /usr/bin/javac
+    path: /opt/jdk1.8.0_201/bin/javac
 
-- name: Make Jar available for system
-  command: 'alternatives --install "/usr/bin/jar" "jar" "/opt/jdk1.8.0_201/bin/jar" 2000'
+- name: correct jar version selected
+  alternatives:
+    name: jar
+    link: /usr/bin/jar
+    path: /opt/jdk1.8.0_201/bin/jar
 
 - name: Clean up
-  file: 
-    state: absent 
+  file:
+    state: absent
     path: /opt/jdk-8u201-linux-x64.tar.gz
-
-- name: 'check presence of java'
-  command: '/usr/bin/java -version'
-  register: java
-  changed_when: no
-  tags:
-    - artifactory
-    - verify
 
 - name: 'yum install prerequisites'
   yum:
@@ -88,7 +92,7 @@
 - name: 'download sonarqube'
   file:
     path: "{{ sonar_home }}"
-    state: directory 
+    state: directory
 
 - name: 'unzip sonarqube'
   unarchive:
@@ -99,7 +103,7 @@
 - name: Install NGINX
   yum:
     name: nginx
-    state: latest
+    state: present
     update_cache: yes
 
 
@@ -115,10 +119,15 @@
     groups: sonar
     append: yes
     password: sonar
-- name: CHOWN sonar:sonar
-  command: "chown -R sonar:sonar /opt/sonarqube/sonarqube-7.6/"
-  changed_when: false
 
+- name: CHOWN sonar:sonar
+  file:
+    path: /opt/sonarqube/sonarqube-7.6/
+    owner: sonar
+    group: sonar
+    recurse: yes
+  changed_when: false
+#   command: "chown -R sonar:sonar /opt/sonarqube/sonarqube-7.6/"
 
 - name: RUN_AS_USER=sonar
   blockinfile:
@@ -128,11 +137,27 @@
     content: |
       RUN_AS_USER=sonar
 
-- name: Allow port 9000
-  shell: iptables -I INPUT -p tcp --dport 9000 -m state --state NEW,ESTABLISHED -j ACCEPT
+# - name: Allow port 9000
+#   shell: iptables -I INPUT -p tcp --dport 9000 -m state --state NEW,ESTABLISHED -j ACCEPT
+
+# - name: Allow port 8080
+#   shell: iptables -I INPUT -p tcp --dport 8080 -m state --state NEW,ESTABLISHED -j ACCEPT
 
 - name: Allow port 8080
-  shell: iptables -I INPUT -p tcp --dport 8080 -m state --state NEW,ESTABLISHED -j ACCEPT
+  iptables:
+     chain: INPUT
+     protocol: tcp
+     destination_port: "8080"
+     ctstate: NEW,ESTABLISHED
+     jump: ACCEPT
+
+- name: Allow port 9000
+  iptables:
+     chain: INPUT
+     protocol: tcp
+     destination_port: "9000"
+     ctstate: NEW,ESTABLISHED
+     jump: ACCEPT
 
 - name: Clean artifact path
   file:
@@ -171,9 +196,9 @@
 
 
 - name: Ensure the SonarQube service is running
-  service: 
-    name: sonarqube 
-    state: started 
+  service:
+    name: sonarqube
+    state: started
     enabled: yes
 
 - name: NGINX Confix
@@ -196,8 +221,8 @@
     - nginx
 
 - name: Ensure the Nginx service is running
-  service: 
-    name: nginx 
+  service:
+    name: nginx
     state: started
     enabled: yes
   tags:
